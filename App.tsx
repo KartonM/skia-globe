@@ -12,7 +12,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import { useLayout } from '@react-native-community/hooks';
 import {
   useDerivedValue,
-  useSharedValue
+  useSharedValue, withDecay
 } from 'react-native-reanimated';
 import { View } from 'react-native';
 import { Matrix3 } from '@shopify/react-native-skia/src/skia/types/Matrix4';
@@ -105,10 +105,6 @@ export const multiply3 = (a: Matrix3, b: Matrix3): Matrix3 => {
   return result as unknown as Matrix3;
 };
 
-const radToDeg = (rad: number) => {
-  'worklet';
-  return rad * 180 / Math.PI
-};
 
 export default function App() {
   const image = useImage(require('./assets/Equirectangular-projection.jpg'))
@@ -121,8 +117,15 @@ export default function App() {
   // A vector from sphere center to the point where user started the pan gesture
   const panStart = useSharedValue<Vec3>([0, 0, 0])
   const gestureStartedOutside = useSharedValue(false)
-  const rotationMatrix = useSharedValue<Matrix3>([1, 0, 0, 0, 1, 0, 0, 0, 1])
-  const rotationAtPanStart = useSharedValue<Matrix3>([0, 0, 0, 0, 0, 0, 0, 0, 0])
+  const rotationAtPanStart = useSharedValue<Matrix3>([1, 0, 0, 0, 1, 0, 0, 0, 1])
+  const prevRotation = useSharedValue<Matrix3>([1, 0, 0, 0, 1, 0, 0, 0, 1])
+
+  const axis = useSharedValue<Vec3>([1, 0, 0])
+  const angle = useSharedValue(0)
+
+  const rotationMatrix = useDerivedValue(() =>
+    multiply3(getRotationMatrix(axis.value, angle.value), prevRotation.value)
+  )
 
   const gesture = Gesture.Pan()
     .onBegin((e) => {
@@ -160,10 +163,8 @@ export default function App() {
 
         const t = (0 <= t1 && t1 <= 1) ? t1 : t2;
 
-        const intersectionX = panStart.value[0] + t! * dx;
-        const intersectionY = panStart.value[1] + t! * dy;
-        x = intersectionX;
-        y = intersectionY;
+        x = panStart.value[0] + t! * dx;
+        y = panStart.value[1] + t! * dy;
         z = 0
       }
 
@@ -171,9 +172,25 @@ export default function App() {
       const a = normalizeVec([x, y, z])
       // A vector from sphere center to the point where user started the pan gesture
       const b = normalizeVec(panStart.value)
-      const axis = normalizeVec(crossProductVec(b, a))
-      const angle = Math.acos(dotProduct(b, a))
-      rotationMatrix.value = multiply3(getRotationMatrix(axis, angle), rotationAtPanStart.value)
+      prevRotation.value = rotationAtPanStart.value
+      axis.value = normalizeVec(crossProductVec(b, a))
+      angle.value = Math.acos(dotProduct(b, a))
+    }).onFinalize((e) => {
+      const x = e.x - r
+      const y = e.y - r
+
+      const velocity = Math.hypot(e.velocityX, e.velocityY) / r
+
+      // TODO there might be a better way to check if velocity is in the same direction as the pan gesture
+      // Take one of vectors perpendicular to the pan vector from Z plane and check if the pan
+      // and velocity are on the same side
+      const perpendicularToGesture = [-(y - panStart.value[1]), (x - panStart.value[0])]
+      const velocityCross = perpendicularToGesture[0] * e.velocityY - perpendicularToGesture[1] * e.velocityX
+      const gestureCross =
+        perpendicularToGesture[0] * (y - panStart.value[1])
+        - perpendicularToGesture[1] * (x - panStart.value[0])
+
+      angle.value = withDecay({ velocity: velocity * Math.sign(velocityCross * panCross) })
     })
 
   const uniforms = useDerivedValue(() => ({ c: [cx, cy], r, rotationMatrix: rotationMatrix.value }))

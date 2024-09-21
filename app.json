@@ -19,7 +19,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "pl.kozubek.marcin.skia_globe"
     },
     "web": {
       "favicon": "./assets/favicon.png"
