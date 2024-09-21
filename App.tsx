@@ -120,6 +120,7 @@ export default function App() {
 
   // A vector from sphere center to the point where user started the pan gesture
   const panStart = useSharedValue<Vec3>([0, 0, 0])
+  const gestureStartedOutside = useSharedValue(false)
   const rotationMatrix = useSharedValue<Matrix3>([1, 0, 0, 0, 1, 0, 0, 0, 1])
   const rotationAtPanStart = useSharedValue<Matrix3>([0, 0, 0, 0, 0, 0, 0, 0, 0])
 
@@ -127,10 +128,19 @@ export default function App() {
     .onBegin((e) => {
       const x = e.x - r
       const y = e.y - r
+      if (Math.hypot(x, y) > r) {
+        gestureStartedOutside.value = true
+        return
+      } else {
+        gestureStartedOutside.value = false
+      }
       const z = Math.sqrt(r * r - x * x - y * y)
       panStart.value = [x, y, z]
       rotationAtPanStart.value = rotationMatrix.value
     }).onChange((e) => {
+      if (gestureStartedOutside.value) {
+        return
+      }
       if (Math.hypot(e.x - r, e.y - r) > r) {
         // TODO worry about this later
         return
