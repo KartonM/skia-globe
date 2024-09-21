@@ -141,14 +141,35 @@ export default function App() {
       if (gestureStartedOutside.value) {
         return
       }
+      let x = e.x - r
+      let y = e.y - r
+      let z = Math.sqrt(r * r - x * x - y * y)
       if (Math.hypot(e.x - r, e.y - r) > r) {
-        // TODO worry about this later
-        return
+        // Set x, y to the point where the pan gesture intersects with the sphere
+        const dx = x - panStart.value[0];
+        const dy = y - panStart.value[1];
+
+        const a = dx * dx + dy * dy;
+        const b = 2 * (panStart.value[0] * dx + panStart.value[1] * dy);
+        const c = panStart.value[0] * panStart.value[0] + panStart.value[1] * panStart.value[1] - r * r;
+
+        const discriminant = b * b - 4 * a * c;
+
+        const t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
+        const t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+
+        const t = (0 <= t1 && t1 <= 1) ? t1 : t2;
+
+        const intersectionX = panStart.value[0] + t! * dx;
+        const intersectionY = panStart.value[1] + t! * dy;
+        x = intersectionX;
+        y = intersectionY;
+        z = 0
       }
-      const x = e.x - r
-      const y = e.y - r
-      const z = Math.sqrt(r * r - x * x - y * y)
+
+      // A vector from sphere center to the current point
       const a = normalizeVec([x, y, z])
+      // A vector from sphere center to the point where user started the pan gesture
       const b = normalizeVec(panStart.value)
       const axis = normalizeVec(crossProductVec(b, a))
       const angle = Math.acos(dotProduct(b, a))
@@ -166,6 +187,7 @@ export default function App() {
             <Paint color={'#333'}/>
           </Fill>
           <Circle r={r} cy={cy} cx={cx}>
+            {/* TODO pass texture res as a uniform */}
             <Shader source={source} uniforms={uniforms}>
               <ImageShader image={image} fit="cover" rect={{ x: 0, y: 0, height: 1, width: 2 }}/>
             </Shader>
